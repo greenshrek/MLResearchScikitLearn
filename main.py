@@ -11,6 +11,16 @@ from sklearn.feature_selection import SelectPercentile
 from sklearn.feature_selection import f_regression
 from sklearn.ensemble import RandomForestClassifier
 
+#univariate feature selection
+from sklearn.feature_selection import SelectPercentile
+from sklearn.feature_selection import f_regression
+
+#mode selection
+from sklearn import tree
+from sklearn import model_selection
+from sklearn.model_selection import train_test_split
+from sklearn import metrics
+
 class MLResearchScikitLearn:
 
     def __init__(self, dataset):
@@ -37,7 +47,6 @@ class MLResearchScikitLearn:
     def convertFeatureToBinary(self):
         median = self.dataset["imdb_score"].median()
         for i in range (self.dataset.shape[0]):
-            print(self.dataset["imdb_score"][5])
             if self.dataset["imdb_score"][i] >= median:
                 self.dataset["imdb_score"][i] = 1
             elif self.dataset["imdb_score"][i] < median:
@@ -47,30 +56,74 @@ class MLResearchScikitLearn:
         sns.boxplot(data=pd.DataFrame(self.dataset["imdb_score"]))
         plt.show()
 
-    def featureSelection(self):
+    def handleImbalance(self):
+        targets = self.dataset["imdb_score"].value_counts()
+        #print (targets)
+        print ("Minority class represents just ",(targets[1]/len(self.dataset["imdb_score"]))*100, " % of the dataset") 
+
+    def univariateFeatureSelection(self):
         X = self.dataset.loc[:, self.dataset.columns != 'imdb_score']
-        print(X)
         y = self.dataset["imdb_score"]
-        print(y)
+        selector = SelectPercentile(f_regression, percentile=25)
+        selector.fit(X,y)
+        for s in selector.scores_:
+            print ("Score : ", s)
+
+    def treeBaseFeatureSelection(self):
+        X = self.dataset.loc[:, self.dataset.columns != 'imdb_score']
+        y = self.dataset["imdb_score"]
         # Build a forest and compute the feature importance
         forest = RandomForestClassifier(n_estimators=250, random_state=0)
         forest.fit(X, y)
         importances = forest.feature_importances_
-        print("importante: ",importances)
         for index in range(X.shape[1]):
             #print(index)
             print ("Importance of feature ", index, "is", importances[index])
 
+    def kFoldCrossValidation(self):
+        allResults= []
+        split_ds = train_test_split(self.dataset, test_size=int(self.dataset.shape[0]*20/100), random_state = 1)
+
+        train = split_ds[0]
+        test = split_ds[1]
+
+        train_data = train.loc[:, train.columns != 'imdb_score']
+        train_data = train_data.to_numpy()
+
+        train_target = train["imdb_score"]
+        train_target = train_target.to_numpy()  
+
+        kf= model_selection.KFold(n_splits=6, shuffle=True, random_state=1)
+        
+        print("train data  is >>>>>>:")
+
+        for train_index, test_index in kf.split(train_data):
+            clf= tree.DecisionTreeClassifier()
+            clf.fit(train_data[train_index], train_target[train_index])
+
+            results= clf.predict(train_data[test_index])
+
+            allResults.append(metrics.accuracy_score(results, train_target[test_index]))
+
+        print ("Accuracy is ", np.mean(allResults))
+
+    def kFoldTest(self):
+        allResults= []
+        iris = datasets.load_iris()
+        print(iris)
+
+
 dataset = pd.read_csv("movie_metadata.csv")
-
+print("initial dataset", dataset)
 classobj = MLResearchScikitLearn(dataset)
-
 classobj.imputation()
 classobj.featureEncoding()
-
-
 classobj.convertFeatureToBinary()
-classobj.featureSelection()
+#classobj.handleImbalance()
+#classobj.univariateFeatureSelection()
 #classobj.checkOutliers()
-print(dataset)
+classobj.kFoldCrossValidation()
+
 #print("nan:>>>>",dataset.isna().any())
+
+
