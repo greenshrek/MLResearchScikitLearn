@@ -58,6 +58,7 @@ class MLResearchScikitLearn:
         self.selected_features = []
 
     def imputation(self):
+        #this function imputes any missing values in the feature column based on the strategy parameter of SimpleImputer class
 
         #apply imputer with strategy=most_frequent for missing values in string type feature column
         imputer_string = SimpleImputer(missing_values=np.NaN, strategy="most_frequent")
@@ -70,7 +71,7 @@ class MLResearchScikitLearn:
         self.dataset[self.integerfeatures] = imputer_integer.transform(self.dataset[self.integerfeatures])
 
     def featureDrop(self, featurename):
-        #this function is used to drop any feature
+        #this function is used to drop any feature based on the request
         self.dataset.drop(featurename,axis=1,inplace=True)
 
     def featureEncoding(self):
@@ -79,6 +80,7 @@ class MLResearchScikitLearn:
         self.dataset[self.nominalfeatures] = enc.fit_transform(self.dataset[self.nominalfeatures])
 
     def convertFeatureToBinary(self):
+        #This method is not used anymore but was used to create a proof of concept for using binary classification
         median = self.dataset["imdb_score"].median()
         for i in range (self.dataset.shape[0]):
             if self.dataset["imdb_score"][i] >= median:
@@ -87,19 +89,24 @@ class MLResearchScikitLearn:
                 self.dataset["imdb_score"][i] = 0
 
     def dataCategorization(self):
+        #This function labels the feature column
         self.dataset["imdb_score"]=pd.cut(self.dataset['imdb_score'], bins=[0,4,6,8,10], right=True, labels=False)+1
 
     def checkOutliers(self):
+        #This function draws a graph that shows if there are any outliers
         sns.boxplot(data=pd.DataFrame(self.dataset))
         plt.tight_layout()
         plt.show()
 
     def handleImbalance(self):
+        #This function is used to check if there is any imbalance in the target class
         targets = self.dataset["imdb_score"].value_counts()
-        #print (targets)
         print ("Minority class represents just ",(targets[1]/len(self.dataset["imdb_score"]))*100, " % of the dataset") 
 
     def confusionMatrix(self,X_train,y_train,X_test,y_test):
+        #This function creates a confusion matrix which is a validation technique for the created model.
+        #Also, this function prints the accuracy
+
         model = RandomForestClassifier()
         model.fit(X_train, y_train)
         y_pred= model.predict(X_test)
@@ -110,7 +117,10 @@ class MLResearchScikitLearn:
         cf_mat= confusion_matrix(y_true=y_test, y_pred=y_pred)
         print('Confusion matrix of model:\n', cf_mat)
 
+
     def univariateFeatureSelection(self):
+        #This function selects the top features on the basis of ranking of association between feature and target class
+
         X = self.dataset.loc[:, self.dataset.columns != 'imdb_score']
         y = self.dataset["imdb_score"]
         selector = SelectKBest(f_classif, k=10)
@@ -128,13 +138,18 @@ class MLResearchScikitLearn:
 
 
     def treeBaseFeatureSelection(self):
+        #this function selects the top features with the help of a decision tree. 
+        # Decision tree picks the root node as a feature that provides largest reduction in uncertainity
+
         X = self.dataset.loc[:, self.dataset.columns != 'imdb_score']
         y = self.dataset["imdb_score"]
+
         # Build a forest and compute the feature importance
         forest = RandomForestClassifier(n_estimators=250, random_state=0)
         forest.fit(X, y)
         importances = forest.feature_importances_
         print(importances)
+
         for index in range(X.shape[1]):
             #print(index)
             print ("Importance of feature ", X.columns[index], "is", importances[index])
@@ -149,12 +164,19 @@ class MLResearchScikitLearn:
 
 
     def greedyFeatureSelection(self):
+        #this function is the implemenation of greedy backward feature selection
+
         X = self.dataset.loc[:, self.dataset.columns != 'imdb_score']
         y = self.dataset["imdb_score"]
         decTree = DecisionTreeClassifier()
         scores = model_selection.cross_val_score(decTree, X, y, cv=10)
         print ('Initial Result',scores.mean())
+
+        #Logistic regression is a classification algorithm used to assign observations to a discrete set of classes.
         estimator = linear_model.LogisticRegression(multi_class='auto', solver ='lbfgs')
+
+        #Feature ranking with recursive feature elimination and cross-validated selection of the best number of features.
+        #cv Determines the cross-validation splitting strategy. 10 denotes 10-fold validation
         rfecv= RFECV(estimator, cv=10)
         rfecv.fit(X, y)
 
@@ -177,6 +199,8 @@ class MLResearchScikitLearn:
         print(self.dataset)
 
     def featureScaling(self):
+        #This function normalizes the data across all the columns in the dataset
+        #all the columns will have value between 0 and 1
 
         sc_X = preprocessing.MinMaxScaler()
         self.dataset[self.selected_features] = sc_X.fit_transform(self.dataset[self.selected_features])
@@ -203,7 +227,6 @@ class MLResearchScikitLearn:
         kf= model_selection.KFold(n_splits=15, shuffle=True, random_state=1)
         
         print("train data  is >>>>>>:")
-        models = ["RandomForestClassifier", "KNeighborsClassifier", "GaussianNB", "SVC"]
         clf= RandomForestClassifier(n_estimators = 200)
         #clf = KNeighborsClassifier(n_neighbors=3, metric='manhattan')
         #clf = GaussianNB()
@@ -219,6 +242,7 @@ class MLResearchScikitLearn:
 
         print ("Accuracy k fold is ", np.mean(allResults))
 
+
     def sklearnMetricsRandomForest(self):
 
         X = self.dataset.loc[:, self.dataset.columns != 'imdb_score'].to_numpy()
@@ -227,42 +251,56 @@ class MLResearchScikitLearn:
         rfc = RandomForestClassifier(n_jobs=-1,max_features= 'sqrt' ,n_estimators=50, oob_score = True) 
 
         param_grid = { 
-            'n_estimators': [100, 150, 200, 300],
-            'max_features': ['auto', 'sqrt', 'log2']
+            'n_estimators': [100, 150, 200, 250, 300],
+            'min_samples_split' : np.arange(2, 5),
+            'min_samples_leaf' : np.arange(1, 5),
+            'max_features': ['auto', 'sqrt', 'log2'],
+            'n_jobs' : [-1]
         }
 
         CV_rfc = GridSearchCV(estimator=rfc, param_grid=param_grid, cv= 5)
         CV_rfc.fit(X, y)
         
-        print(CV_rfc.best_params_)
+        print("best parameters for Random Forest Classifier: ",CV_rfc.best_params_)
 
 
     def sklearnMetricsDecisionTree(self):
         X = self.dataset.loc[:, self.dataset.columns != 'imdb_score'].to_numpy()
         y = self.dataset["imdb_score"].to_numpy()
 
-        parameters={ 'criterion':['gini','entropy'],'max_depth': np.arange(3, 15)}
+        parameters={ 'criterion':['gini','entropy'],
+        'max_depth': np.arange(3, 15), 
+        'min_samples_leaf':np.arange(1,10), 
+        'splitter' : ['best', 'random'], 
+        'max_features': ['auto', 'sqrt', 'log2']}
+
         dtc=tree.DecisionTreeClassifier()
         dtc= GridSearchCV(dtc,parameters, cv=5)
         dtc .fit(X,y)
         
         #dt_model = dtc.best_estimator_
         #print("best model>",dt_model)
-        print(dtc.best_params_)
+        print("Best parameters for Decision Tree Classifier: ", dtc.best_params_)
 
-    def sklearnMetrics(self):
+
+    def sklearnMetricsKNN(self):
 
         X = self.dataset.loc[:, self.dataset.columns != 'imdb_score'].to_numpy()
         y = self.dataset["imdb_score"].to_numpy()
     
         pipe_lr= Pipeline([('scl', StandardScaler()), ('clf', KNeighborsClassifier())])
-        param_grid= [ {'clf__n_neighbors': list(range(1, 5)),  'clf__p':[1, 2, 3, 4, 5]}]
+        param_grid= [ {'clf__n_neighbors': list(range(1, 5)),
+        'clf__p':[1, 2, 3, 4, 5],
+        'clf__algorithm':['auto', 'ball_tree', 'kd_tree', 'brute'],
+        'clf__leaf_size': list(range(40, 50)),
+        'clf__weights': ['uniform', 'distance']}]
         
         clf= GridSearchCV(pipe_lr, param_grid)
         clf.fit(X, y)
         
         print("\n Best parameters set found on development set:")
         print(clf.best_params_ , "with a score of ", clf.best_score_)
+
 
     def createModel(self):
 
@@ -271,7 +309,6 @@ class MLResearchScikitLearn:
         model = RandomForestClassifier()
         # Train the model using the training sets
         model.fit(self.X_train,self.y_train)
-        print("here>>>")
 
         results = []
         for tf in self.X_test:
@@ -300,9 +337,9 @@ classobj.featureScaling()
 
 classobj.splitData()
 #classobj.kFoldCrossValidation()
-#classobj.sklearnMetrics()
+classobj.sklearnMetricsKNN()
 #classobj.sklearnMetricsRandomForest()
-classobj.sklearnMetricsDecisionTree()
+#classobj.sklearnMetricsDecisionTree()
 print(classobj.createModel())
 
 #print("nan:>>>>",dataset.isna().any())
