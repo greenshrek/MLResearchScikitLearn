@@ -39,6 +39,12 @@ from sklearn import metrics
 
 from sklearn.metrics import confusion_matrix, accuracy_score
 
+#evaluation
+from sklearn.model_selection import GridSearchCV
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
+from sklearn.model_selection import cross_val_score
+
 class MLResearchScikitLearn:
 
     def __init__(self, dataset):
@@ -84,7 +90,8 @@ class MLResearchScikitLearn:
         self.dataset["imdb_score"]=pd.cut(self.dataset['imdb_score'], bins=[0,4,6,8,10], right=True, labels=False)+1
 
     def checkOutliers(self):
-        sns.boxplot(data=pd.DataFrame(self.dataset["imdb_score"]))
+        sns.boxplot(data=pd.DataFrame(self.dataset))
+        plt.tight_layout()
         plt.show()
 
     def handleImbalance(self):
@@ -175,31 +182,6 @@ class MLResearchScikitLearn:
         self.dataset[self.selected_features] = sc_X.fit_transform(self.dataset[self.selected_features])
         print("dataset______",self.dataset)
 
-
-    def kFoldCrossValidation(self):
-
-        allResults= []
-        data = self.dataset.loc[:, self.dataset.columns != 'imdb_score'].to_numpy()
-        target = self.dataset["imdb_score"].to_numpy()
-
-        kf= model_selection.KFold(n_splits=6, shuffle=True, random_state=1)
-        
-        print("train data  is >>>>>>:")
-        clf= RandomForestClassifier()
-        #clf = KNeighborsClassifier(n_neighbors=3, metric='manhattan')
-        #clf = GaussianNB()
-        #clf = SVC(gamma="auto")
-        for train_index, test_index in kf.split(data):
-
-            #clf= tree.DecisionTreeClassifier()
-            clf.fit(data[train_index], target[train_index])
-
-            results= clf.predict(data[test_index])
-
-            allResults.append(metrics.accuracy_score(results, target[test_index]))
-
-        print ("Accuracy k fold is ", np.mean(allResults))
-
     def splitData(self):
         
         split_ds = train_test_split(self.dataset, test_size=int(self.dataset.shape[0]*20/100), random_state = 1)
@@ -212,6 +194,75 @@ class MLResearchScikitLearn:
         self.X_test = test_dataset.loc[:, test_dataset.columns != 'imdb_score'].to_numpy()
         self.y_test = test_dataset["imdb_score"].to_numpy()
 
+    def kFoldCrossValidation(self):
+
+        allResults= []
+        traindata = self.dataset.loc[:, self.dataset.columns != 'imdb_score'].to_numpy()
+        target = self.dataset["imdb_score"].to_numpy()
+
+        kf= model_selection.KFold(n_splits=15, shuffle=True, random_state=1)
+        
+        print("train data  is >>>>>>:")
+        models = ["RandomForestClassifier", "KNeighborsClassifier", "GaussianNB", "SVC"]
+        clf= RandomForestClassifier(n_estimators = 200)
+        #clf = KNeighborsClassifier(n_neighbors=3, metric='manhattan')
+        #clf = GaussianNB()
+        #clf = SVC(gamma="auto")
+        for train_index, test_index in kf.split(traindata):
+
+            #clf= tree.DecisionTreeClassifier()
+            clf.fit(traindata[train_index], target[train_index])
+
+            results= clf.predict(traindata[test_index])
+
+            allResults.append(metrics.accuracy_score(results, target[test_index]))
+
+        print ("Accuracy k fold is ", np.mean(allResults))
+
+    def sklearnMetricsRandomForest(self):
+
+        X = self.dataset.loc[:, self.dataset.columns != 'imdb_score'].to_numpy()
+        y = self.dataset["imdb_score"].to_numpy()
+    
+        rfc = RandomForestClassifier(n_jobs=-1,max_features= 'sqrt' ,n_estimators=50, oob_score = True) 
+
+        param_grid = { 
+            'n_estimators': [100, 150, 200, 300],
+            'max_features': ['auto', 'sqrt', 'log2']
+        }
+
+        CV_rfc = GridSearchCV(estimator=rfc, param_grid=param_grid, cv= 5)
+        CV_rfc.fit(X, y)
+        
+        print(CV_rfc.best_params_)
+
+
+    def sklearnMetricsDecisionTree(self):
+        X = self.dataset.loc[:, self.dataset.columns != 'imdb_score'].to_numpy()
+        y = self.dataset["imdb_score"].to_numpy()
+
+        parameters={ 'criterion':['gini','entropy'],'max_depth': np.arange(3, 15)}
+        dtc=tree.DecisionTreeClassifier()
+        dtc= GridSearchCV(dtc,parameters, cv=5)
+        dtc .fit(X,y)
+        
+        #dt_model = dtc.best_estimator_
+        #print("best model>",dt_model)
+        print(dtc.best_params_)
+
+    def sklearnMetrics(self):
+
+        X = self.dataset.loc[:, self.dataset.columns != 'imdb_score'].to_numpy()
+        y = self.dataset["imdb_score"].to_numpy()
+    
+        pipe_lr= Pipeline([('scl', StandardScaler()), ('clf', KNeighborsClassifier())])
+        param_grid= [ {'clf__n_neighbors': list(range(1, 5)),  'clf__p':[1, 2, 3, 4, 5]}]
+        
+        clf= GridSearchCV(pipe_lr, param_grid)
+        clf.fit(X, y)
+        
+        print("\n Best parameters set found on development set:")
+        print(clf.best_params_ , "with a score of ", clf.best_score_)
 
     def createModel(self):
 
@@ -248,7 +299,10 @@ classobj.selectFeatures()
 classobj.featureScaling()
 
 classobj.splitData()
-classobj.kFoldCrossValidation()
+#classobj.kFoldCrossValidation()
+#classobj.sklearnMetrics()
+#classobj.sklearnMetricsRandomForest()
+classobj.sklearnMetricsDecisionTree()
 print(classobj.createModel())
 
 #print("nan:>>>>",dataset.isna().any())
