@@ -22,9 +22,10 @@ from sklearn.svm import SVC
 from sklearn.feature_selection import RFECV
 from sklearn import linear_model
 from sklearn import preprocessing
-
+from sklearn.metrics import classification_report
 from imblearn.over_sampling import SMOTE
 from sklearn.svm import LinearSVC
+import pickle
 
 #univariate feature selection
 from sklearn.feature_selection import SelectPercentile
@@ -44,6 +45,7 @@ from sklearn.model_selection import GridSearchCV
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import cross_val_score
+from sklearn.metrics import classification_report
 
 class MLResearchScikitLearn:
 
@@ -103,18 +105,69 @@ class MLResearchScikitLearn:
         targets = self.dataset["imdb_score"].value_counts()
         print ("Minority class represents just ",(targets[1]/len(self.dataset["imdb_score"]))*100, " % of the dataset") 
 
-    def confusionMatrix(self,X_train,y_train,X_test,y_test):
+    def heatMap(self):
+        #Using Pearson Correlation
+        plt.figure(figsize=(12,10))
+        cor = self.dataset.corr()
+        sns.heatmap(cor, annot=True, cmap='Greens')
+        plt.show()
+
+    def evaluationMetrics(self, model):
+        #This function creates a confusion matrix, produces F1 score
+        #Also, this function prints the accuracy and plots confusion matrix
+
+        if model == "RandomForestClassifier":
+            #model = RandomForestClassifier()
+            model = RandomForestClassifier(max_features =  'log2', n_estimators = 100, n_jobs = -1)
+        elif model == "DecisionTreeClassifier":
+            #model = DecisionTreeClassifier()
+            model = DecisionTreeClassifier(max_depth = 9, min_samples_leaf = 2)
+        elif model =="kNN":
+            #model = KNeighborsClassifier()
+            model = KNeighborsClassifier(algorithm = 'auto', n_neighbors = 3, p =1)
+        elif model == "SVC":
+            #model = SVC()
+            model = SVC(C=10, break_ties=False, cache_size=200, class_weight=None, coef0=0.0,
+            decision_function_shape='ovr', degree=3, gamma=1, kernel='rbf', max_iter=-1,
+            probability=False, random_state=None, shrinking=True, tol=0.001,
+            verbose=False)
+
+        #model = RandomForestClassifier()
+        model.fit(self.X_train, self.y_train)
+        y_pred= model.predict(self.X_test)
+
+        accuracy = accuracy_score(self.y_test, y_pred)
+        print("Accuracy of model: ", accuracy )
+
+        cf_mat= confusion_matrix(y_true=self.y_test, y_pred=y_pred)
+        print('Confusion matrix of model:\n', cf_mat)
+
+        #generates the F1 score
+        print(classification_report(self.y_test,y_pred))
+
+        sns.heatmap(confusion_matrix(self.y_test,y_pred),annot=True,lw =2,cbar=False, linewidths=.5)
+        plt.ylabel("True Labels")
+        plt.xlabel("Predicted Labels")
+        plt.title("CONFUSION MATRIX")
+        #plt.tight_layout()
+        plt.show()
+
+
+
+    def confusionMatrix(self):
         #This function creates a confusion matrix which is a validation technique for the created model.
         #Also, this function prints the accuracy
 
-        model = RandomForestClassifier()
-        model.fit(X_train, y_train)
-        y_pred= model.predict(X_test)
+        #'max_features': 'log2', 'min_samples_leaf': 1, 'min_weight_fraction_leaf': 0, 'n_estimators': 100, 'n_jobs': -1
+        model = RandomForestClassifier(max_features =  'log2', n_estimators = 100, n_jobs = -1)
+        #model = RandomForestClassifier()
+        model.fit(self.X_train, self.y_train)
+        y_pred= model.predict(self.X_test)
 
-        accuracy = accuracy_score(y_test, y_pred)
+        accuracy = accuracy_score(self.y_test, y_pred)
         print("Accuracy of model: ", accuracy )
 
-        cf_mat= confusion_matrix(y_true=y_test, y_pred=y_pred)
+        cf_mat= confusion_matrix(y_true=self.y_test, y_pred=y_pred)
         print('Confusion matrix of model:\n', cf_mat)
 
 
@@ -242,9 +295,24 @@ class MLResearchScikitLearn:
 
         print ("Accuracy k fold is ", np.mean(allResults))
 
+    def sklearnMetricSVM(self):
+        #this function is used to do hyper-parameter optimization for SVM model using gridsearchCV
+
+        X = self.dataset.loc[:, self.dataset.columns != 'imdb_score'].to_numpy()
+        y = self.dataset["imdb_score"].to_numpy()
+
+        parameters = {'C': [1, 10],'gamma': [0.001, 0.01, 1]}
+        model = SVC()
+        grid = GridSearchCV(estimator=model, param_grid=parameters)
+        grid.fit(X, y)
+
+        # summarize the results of the grid search
+        print("best score: ",grid.best_score_)
+        print("best params: ", grid.best_estimator_)
 
     def sklearnMetricsRandomForest(self):
 
+        #this function is used to do hyper-parameter optimization for RandomForestClassification model using gridsearchCV
         X = self.dataset.loc[:, self.dataset.columns != 'imdb_score'].to_numpy()
         y = self.dataset["imdb_score"].to_numpy()
     
@@ -252,19 +320,22 @@ class MLResearchScikitLearn:
 
         param_grid = { 
             'n_estimators': [100, 150, 200, 250, 300],
-            'min_samples_split' : np.arange(2, 5),
+            'min_weight_fraction_leaf' : [0,0.5],
             'min_samples_leaf' : np.arange(1, 5),
             'max_features': ['auto', 'sqrt', 'log2'],
             'n_jobs' : [-1]
         }
-
+        print("inside>>>")
         CV_rfc = GridSearchCV(estimator=rfc, param_grid=param_grid, cv= 5)
         CV_rfc.fit(X, y)
         
-        print("best parameters for Random Forest Classifier: ",CV_rfc.best_params_)
+        print("best parameters for Random Forest Classifier: ",CV_rfc.best_params_, "best score : ", CV_rfc.best_score_)
 
 
     def sklearnMetricsDecisionTree(self):
+
+        #this function is used to do hyper-parameter optimization for DecisionTreeClassifier model using gridsearchCV
+ 
         X = self.dataset.loc[:, self.dataset.columns != 'imdb_score'].to_numpy()
         y = self.dataset["imdb_score"].to_numpy()
 
@@ -282,19 +353,33 @@ class MLResearchScikitLearn:
         #print("best model>",dt_model)
         print("Best parameters for Decision Tree Classifier: ", dtc.best_params_)
 
+    def generategraph(self):
+       #this function generates the graph with the accuracy results for each model used in this study
+        label = ['RandomForestClassifier','DecisonTreeClassifier','KNNClassifier','SVC']
+        accuracy = [76.1,69.4,68.1,66.1]
+        index = np.arange(len(label))
+        plt.bar(index, accuracy)
+        plt.xlabel('Models', fontsize=10)
+        plt.ylabel('Accuracy', fontsize=10)
+        plt.xticks(index, label, fontsize=10, rotation=30)
+        plt.title('Accuracy of Claasification Models')
+        plt.show()
 
     def sklearnMetricsKNN(self):
 
         X = self.dataset.loc[:, self.dataset.columns != 'imdb_score'].to_numpy()
+
         y = self.dataset["imdb_score"].to_numpy()
-    
         pipe_lr= Pipeline([('scl', StandardScaler()), ('clf', KNeighborsClassifier())])
-        param_grid= [ {'clf__n_neighbors': list(range(1, 5)),
-        'clf__p':[1, 2, 3, 4, 5],
-        'clf__algorithm':['auto', 'ball_tree', 'kd_tree', 'brute'],
-        'clf__leaf_size': list(range(40, 50)),
-        'clf__weights': ['uniform', 'distance']}]
-        
+ 
+        param_grid= [ {'clf__n_neighbors': list(range(1, 5)),  'clf__p':[1, 2, 3, 4, 5], 'clf__algorithm':['auto', 'kd_tree']}]
+        clf= GridSearchCV(pipe_lr, param_grid,cv=5)
+        clf.fit(X, y)
+        print("\n Best parameters set found on development set:")
+        print(clf.best_params_ , "with a score of ", clf.best_score_)
+
+
+
         clf= GridSearchCV(pipe_lr, param_grid)
         clf.fit(X, y)
         
@@ -304,9 +389,9 @@ class MLResearchScikitLearn:
 
     def createModel(self):
 
-        self.confusionMatrix(self.X_train,self.y_train,self.X_test,self.y_test)
+        self.confusionMatrix()
 
-        model = RandomForestClassifier()
+        model = RandomForestClassifier(max_features =  'log2', n_estimators = 100)
         # Train the model using the training sets
         model.fit(self.X_train,self.y_train)
 
@@ -315,6 +400,10 @@ class MLResearchScikitLearn:
             result = ""
             result = model.predict([tf])
             results.append(result[0])
+
+        # save the model to disk
+        filename = 'imdb_multiclassification_model.sav'
+        pickle.dump(model, open(filename, 'wb'))
 
         predicted_results = np.array(results)
         return (metrics.accuracy_score(predicted_results, self.y_test)*100)
@@ -327,21 +416,33 @@ classobj.imputation()
 
 #as movie_imdb_link is the most irrelevant feature hence dropping it
 classobj.featureDrop('movie_imdb_link')
+
 #classobj.checkOutliers()
 classobj.featureEncoding()
 classobj.dataCategorization()
 classobj.handleImbalance()
+
+
+#classobj.univariateFeatureSelection()
 classobj.treeBaseFeatureSelection()
+#classobj.greedyFeatureSelection()
+
+
 classobj.selectFeatures()
+#classobj.heatMap()
 classobj.featureScaling()
 
 classobj.splitData()
 #classobj.kFoldCrossValidation()
-classobj.sklearnMetricsKNN()
+#classobj.sklearnMetricsKNN()
 #classobj.sklearnMetricsRandomForest()
 #classobj.sklearnMetricsDecisionTree()
-print(classobj.createModel())
+#lassobj.sklearnMetricSVM()
+classobj.createModel()
 
-#print("nan:>>>>",dataset.isna().any())
+#use SVC, 
+#classobj.evaluationMetrics("SVC")
+
+classobj.generategraph()
 
 
